@@ -34,7 +34,7 @@ with open('custom.css') as f:
 def main():
     # App header
     st.title("Payment Capability Diagnostic Tool")
-    st.write("Assess and compare payment processing capabilities across banks and financial institutions")
+    st.markdown("<p style='color:#333333; font-size:1.2em;'>Assess and compare payment processing capabilities across banks and financial institutions</p>", unsafe_allow_html=True)
     
     # Initialize session state for storing assessment data
     if 'assessment_data' not in st.session_state:

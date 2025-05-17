@@ -3,6 +3,7 @@ import pandas as pd
 from business_data import OPTION_DESCRIPTIONS, load_process_details
 from business_outcomes_mapper import (
     get_business_outcomes,
+    get_processes_for_outcome,
     calculate_outcome_score,
     get_outcome_process_details,
     get_outcome_summary,
@@ -160,11 +161,20 @@ def render_assessment_view(process_data):
     stage_names = get_stage_names()
     
     # Stage selection
+    # Check if current_stage is already set in session state
+    if 'current_stage' not in st.session_state:
+        st.session_state.current_stage = 1
+        
+    # Use the current_stage from session state as the default index
     selected_stage = st.selectbox(
         "Select a stage to assess:",
         options=list(range(1, 13)),
+        index=st.session_state.current_stage - 1,
         format_func=lambda x: f"Stage {x}: {stage_names[x]}"
     )
+    
+    # Update current_stage in session state when selectbox changes
+    st.session_state.current_stage = selected_stage
     
     st.markdown(f"## Stage {selected_stage}: {stage_names[selected_stage]}")
     
@@ -209,13 +219,13 @@ def render_assessment_view(process_data):
     
     with col1:
         if selected_stage > 1:
-            if st.button("Previous Stage"):
+            if st.button("Previous Stage", key="prev_stage_btn"):
                 st.session_state.current_stage = selected_stage - 1
                 st.rerun()
     
     with col3:
         if selected_stage < 12:
-            if st.button("Next Stage"):
+            if st.button("Next Stage", key="next_stage_btn"):
                 st.session_state.current_stage = selected_stage + 1
                 st.rerun()
     
@@ -307,6 +317,7 @@ def render_assessment_view(process_data):
         # Store assessment data in session state for use in other views
         st.session_state.assessment_stage_scores = stage_scores
         st.session_state.assessment_overall_total = overall_total
+        st.session_state.assessment_overall_avg = overall_total / 12  # For radar chart comparison
 
 def render_comparison_view(banks):
     """
@@ -371,59 +382,44 @@ def render_comparison_view(banks):
     radar_fig = create_radar_chart(combined_data, selected_banks)
     st.plotly_chart(radar_fig, use_container_width=True)
     
-    # Create heatmap for detailed comparison
-    if len(selected_banks) > 1:
-        st.subheader("Detailed Maturity Comparison")
-        try:
-            heatmap = create_maturity_heatmap(combined_data, selected_banks)
-            st.plotly_chart(heatmap, use_container_width=True)
-        except Exception as e:
-            st.warning(f"Could not generate heatmap: {str(e)}")
+    # Maturity heatmap
+    st.subheader("Maturity Heatmap by Stage")
     
-    # Show overall scores in a table
-    st.subheader("Overall Maturity Scores")
+    # Create heatmap of selected banks
+    heatmap_fig = create_maturity_heatmap(combined_data, selected_banks)
+    st.plotly_chart(heatmap_fig, use_container_width=True)
     
-    # Create dataframe for comparison
-    bank_data = []
-    for bank in selected_banks:
-        if bank in combined_data:
-            bank_data.append({
-                "Bank": bank,
-                "Overall Score": combined_data[bank]["Overall"] if "Overall" in combined_data[bank] else 0
-            })
-    
-    comparison_df = pd.DataFrame(bank_data).sort_values(by="Overall Score", ascending=False)
-    st.dataframe(comparison_df, use_container_width=True)
-    
-    # Show stage-by-stage comparison
+    # Stage-by-stage comparison
     st.subheader("Stage-by-Stage Comparison")
     
-    # Create dataframe for detailed comparison
+    # Stage selection
     stage_names = get_stage_names()
+    selected_stage = st.selectbox(
+        "Select a stage to compare:",
+        options=list(range(1, 13)),
+        format_func=lambda x: f"Stage {x}: {stage_names[x]}"
+    )
     
-    # Create a column for each stage
-    comparison_rows = []
+    # Create a bar chart for the selected stage across banks
+    stage_data = {}
     for bank in selected_banks:
         if bank in combined_data:
-            row_data = {"Bank": bank}
-            for stage_id in range(1, 13):
-                stage_name = f"Stage {stage_id}"
-                # Handle cases where bank data might not have the stage
-                value = combined_data[bank].get(stage_id, 0)
-                row_data[stage_name] = value
-            comparison_rows.append(row_data)
+            stage_data[bank] = combined_data[bank][selected_stage]
     
-    stage_df = pd.DataFrame(comparison_rows)
+    # Create a dataframe for the stage comparison
+    stage_df = pd.DataFrame({
+        "Bank": list(stage_data.keys()),
+        "Score": list(stage_data.values())
+    })
     
-    if not stage_df.empty:
-        st.dataframe(stage_df, use_container_width=True)
-    else:
-        st.warning("No data available for stage-by-stage comparison")
+    # Sort by score (descending)
+    stage_df = stage_df.sort_values("Score", ascending=False)
     
-    # Add stage details
-    with st.expander("Stage Details"):
-        for stage_id, stage_name in stage_names.items():
-            st.markdown(f"**Stage {stage_id}**: {stage_name}")
+    st.markdown(f"### Stage {selected_stage}: {stage_names[selected_stage]}")
+    st.dataframe(stage_df, use_container_width=True)
+    
+    # Bar chart of stage comparison
+    st.bar_chart(stage_df.set_index("Bank"))
 
 def render_outcome_analysis(banks):
     """
@@ -433,342 +429,342 @@ def render_outcome_analysis(banks):
     - banks: List of available banks
     """
     st.header("Business Outcome Analysis")
-    st.write("Analyze how payment capabilities impact business outcomes")
+    st.write("Analyze how payment capabilities contribute to business outcomes")
     
-    # Check if user has completed an assessment
-    has_assessment = len(st.session_state.get('assessment_data', {})) > 0
+    # Load data
+    banks_data, _ = load_data()
+    all_processes = load_process_details()
     
-    # Select mode - either existing bank or custom assessment
-    options = ["Analyze Existing Bank"]
+    # Create a mapping of process IDs to names for reference
+    process_names = {p['qid']: p['process'] for p in all_processes}
+    
+    # Check if user has assessment data to include
+    has_assessment = 'assessment_data' in st.session_state and st.session_state.assessment_data
+    
+    # Source selection (user assessment or bank benchmark)
+    st.subheader("Analysis Source")
+    
+    analysis_source = "Bank Benchmark"
     if has_assessment:
-        options.append("Analyze Your Assessment")
-        default_mode = "Analyze Your Assessment"
-    else:
-        default_mode = "Analyze Existing Bank"
+        analysis_source = st.radio(
+            "Select source for analysis:",
+            ["Your Assessment", "Bank Benchmark"],
+            horizontal=True
+        )
     
-    analysis_mode = st.radio(
-        "Select analysis mode:",
-        options,
-        index=options.index(default_mode)
-    )
-    
-    if analysis_mode == "Analyze Existing Bank":
-        # Bank selection
-        selected_bank = render_bank_selection(banks)
-        
-        if not selected_bank:
-            st.warning("Please select a bank to analyze")
-            return
-        
-        # Load data
-        banks_data, _ = load_data()
-        
-        if selected_bank in banks_data:
-            bank_data = banks_data.get(selected_bank, {})
-            
-            # Convert stage scores to process scores (simplified mapping)
-            process_values = {}
-            for stage_id in range(1, 13):
-                # Get process data for stage
-                stage_processes = get_process_data_for_stage(stage_id)
-                score = bank_data[stage_id]
-                
-                # Assign the stage score to all processes in the stage
-                for process in stage_processes:
-                    process_values[process['qid']] = score
-            
-            # For comparison analysis
-            selected_entity = selected_bank
-        else:
-            st.error(f"Data for {selected_bank} not found")
-            return
-    else:  # Analyze Your Assessment
+    if analysis_source == "Your Assessment":
         if not st.session_state.assessment_data:
-            st.warning("You need to complete an assessment first. Go to the Assessment Tool to evaluate your capabilities.")
+            st.warning("Please complete at least one stage of assessment first")
             return
         
-        # Use assessment data directly
+        # Use the user's assessment data
         process_values = st.session_state.assessment_data
-        selected_entity = "Your Assessment"
+        source_name = "Your Assessment"
+    else:
+        # Select a bank for benchmark analysis
+        selected_bank = render_bank_selection(banks)
+        bank_data = get_bank_scores(selected_bank)
+        
+        if not bank_data:
+            st.error(f"No data available for {selected_bank}")
+            return
+        
+        # Convert bank stage scores to process scores
+        # This is an approximation as we don't have actual process scores for banks
+        process_values = {}
+        for stage_id, stage_score in bank_data.items():
+            if isinstance(stage_id, int):  # Skip the "Overall" key
+                stage_processes = get_process_data_for_stage(stage_id)
+                avg_process_score = stage_score / len(stage_processes) if stage_processes else 0
+                
+                for process in stage_processes:
+                    process_values[process['qid']] = avg_process_score
+        
+        source_name = selected_bank
     
-    # Generate business outcome data
+    # Generate outcome data
     outcome_data = create_outcome_radar_data(process_values)
     
     # Create radar chart for outcomes
+    st.subheader(f"Business Outcome Analysis for {source_name}")
+    
     outcome_fig = create_outcome_chart(outcome_data)
     st.plotly_chart(outcome_fig, use_container_width=True)
     
-    # Benchmark comparison
-    banks_data, _ = load_data()
-    
-    # Allow selecting benchmark banks for outcome comparison
-    st.subheader("Benchmark Comparison")
-    benchmark_banks = st.multiselect(
-        "Select banks for benchmark comparison:",
-        options=banks,
-        default=["JPMC (Global)"] if banks else []
-    )
-    
-    if benchmark_banks:
-        # Create comparison data
-        comparison_data = {}
-        
-        # Add current entity data
-        entity_outcomes = {outcome["Outcome"]: outcome["Score"] for outcome in outcome_data}
-        comparison_data[selected_entity] = entity_outcomes
-        
-        # Add benchmark data
-        for bank in benchmark_banks:
-            if bank in banks_data:
-                bank_process_values = {}
-                for stage_id in range(1, 13):
-                    # Get process data for stage
-                    stage_processes = get_process_data_for_stage(stage_id)
-                    score = banks_data[bank][stage_id]
-                    
-                    # Assign the stage score to all processes in the stage
-                    for process in stage_processes:
-                        bank_process_values[process['qid']] = score
-                
-                # Calculate outcomes for this bank
-                bank_outcomes = create_outcome_radar_data(bank_process_values)
-                bank_outcome_dict = {outcome["Outcome"]: outcome["Score"] for outcome in bank_outcomes}
-                comparison_data[bank] = bank_outcome_dict
-        
-        # Create comparison table
-        outcomes = get_business_outcomes()
-        comparison_rows = []
-        
-        for outcome in outcomes:
-            row = {"Business Outcome": outcome}
-            for entity, entity_data in comparison_data.items():
-                row[entity] = entity_data.get(outcome, 0)
-            comparison_rows.append(row)
-        
-        comparison_df = pd.DataFrame(comparison_rows)
-        st.dataframe(comparison_df, use_container_width=True)
-    
-    # Display detailed outcome analysis
-    st.subheader("Business Outcome Details")
-    
-    # Create dataframe for outcomes
-    outcome_df = pd.DataFrame(outcome_data).sort_values(by="Score", ascending=False)
+    # Show outcome scores in a table
+    outcome_df = pd.DataFrame(outcome_data)
+    outcome_df = outcome_df.sort_values("Score", ascending=False)
     
     st.dataframe(outcome_df, use_container_width=True)
     
-    # Show detailed breakdown for each outcome
+    # Allow selecting an outcome for detailed analysis
+    st.subheader("Detailed Outcome Analysis")
     selected_outcome = st.selectbox(
-        "Select an outcome for detailed analysis:",
+        "Select an outcome to analyze:",
         options=get_business_outcomes()
     )
     
-    if selected_outcome:
-        st.subheader(f"Detailed Analysis: {selected_outcome}")
+    # Show the processes that contribute to this outcome
+    outcome_processes = get_outcome_process_details(process_values, process_names, selected_outcome)
+    
+    st.markdown(f"### Processes Contributing to: {selected_outcome}")
+    
+    # Create a dataframe for the processes
+    outcome_process_df = pd.DataFrame(outcome_processes)
+    outcome_process_df = outcome_process_df.sort_values("Score", ascending=False)
+    
+    st.dataframe(outcome_process_df, use_container_width=True)
+    
+    # Show the average score for this outcome
+    avg_score = calculate_outcome_score(process_values, selected_outcome)
+    st.metric(f"Average Score for {selected_outcome}", f"{avg_score:.2f}/1.00")
+    
+    # Recommendations based on the outcome analysis
+    st.subheader("Recommendations")
+    
+    # Find the processes with lowest scores to highlight improvement areas
+    improvement_areas = sorted(outcome_processes, key=lambda x: x["Score"])[:3]
+    
+    st.markdown("### Top Areas for Improvement")
+    
+    for area in improvement_areas:
+        st.markdown(f"#### {area['ID']}: {area['Question']}")
+        st.write(f"Current Score: {area['Score']:.2f}")
         
-        # Get process details for this outcome
-        process_details = get_outcome_process_details(
-            process_values,
-            {p['qid']: p['process'] for p in load_process_details()},
-            selected_outcome
-        )
+        # Get the process description and maturity levels
+        process_detail = next((p for p in all_processes if p['qid'] == area['ID']), None)
         
-        # Create dataframe for process details
-        process_df = pd.DataFrame(process_details).sort_values(by="Score", ascending=False)
-        
-        st.dataframe(process_df, use_container_width=True)
-        
-        # Show insights
-        score = calculate_outcome_score(process_values, selected_outcome)
-        
-        st.metric(f"{selected_outcome} Score", f"{score:.2f}/4.00")
-        
-        # Provide recommendations based on score
-        st.subheader("Insights & Recommendations")
-        
-        if score < 2.0:
-            st.write(f"Your {selected_outcome} capability is below industry average. Focus on improving the lowest scoring processes first.")
-        elif score < 3.0:
-            st.write(f"Your {selected_outcome} capability is at industry average. To gain competitive advantage, invest in the processes that scored below 3.0.")
-        else:
-            st.write(f"Your {selected_outcome} capability is above industry average. Maintain your advantage by continuing to advance emerging capabilities.")
-        
-        # Show top processes to improve
-        lowest_scoring = process_df.nsmallest(3, "Score")
-        
-        st.write("Top processes to improve:")
-        for _, row in lowest_scoring.iterrows():
-            st.write(f"- {row['ID']}: {row['Question']} (Score: {row['Score']})")
+        if process_detail:
+            st.write(f"**Description**: {process_detail['description']}")
+            
+            with st.expander("See improvement recommendations"):
+                st.markdown("**Current Level**:")
+                current_level = "Basic"
+                next_level = "Advanced"
+                
+                if area['Score'] >= 0.33 and area['Score'] < 0.66:
+                    current_level = "Advanced"
+                    next_level = "Leading"
+                elif area['Score'] >= 0.66 and area['Score'] < 1.0:
+                    current_level = "Leading"
+                    next_level = "Emerging"
+                elif area['Score'] >= 1.0:
+                    current_level = "Emerging"
+                    next_level = "Already at top level"
+                
+                st.write(f"Your organization is currently at the **{current_level}** level.")
+                
+                if next_level != "Already at top level":
+                    st.markdown(f"**Next Level ({next_level})**:")
+                    st.write(process_detail[next_level.lower()])
+                    st.markdown("**Recommended Actions**:")
+                    st.write("1. Assess current capabilities and identify gaps")
+                    st.write(f"2. Develop a roadmap to implement {next_level.lower()}-level capabilities")
+                    st.write("3. Prioritize improvements based on business impact")
+                else:
+                    st.write("Congratulations! You're already at the highest maturity level for this process.")
 
 def render_targeted_outcome(process_data, banks):
     """
-    Render the targeted outcome view by connecting assessment weaknesses with business outcomes
+    Render the targeted outcome view
     
     Parameters:
     - process_data: Complete process data
     - banks: List of available banks
     """
-    from data_loader import KPI_MATRIX
-    from business_outcomes_mapper import get_business_outcomes, get_processes_for_outcome
-    
     st.header("Targeted Outcome Analysis")
-    st.write("Connect your weakest assessment areas with business outcomes to focus improvement efforts")
+    st.write("Identify which capabilities to improve to achieve specific business outcomes")
     
-    # Check if user has completed an assessment
-    has_assessment = len(st.session_state.get('assessment_data', {})) > 0
-    
-    if not has_assessment:
-        st.warning("You need to complete an assessment first. Go to the Assessment Tool tab to evaluate your capabilities.")
-        return
-    
-    # Get assessment data
-    assessment_data = st.session_state.assessment_data
-    
-    # Calculate stage totals (sum of process scores)
-    stage_names = get_stage_names()
-    stage_averages = {}
-    for stage_id in range(1, 13):
-        # Get processes for this stage
-        stage_processes = get_process_data_for_stage(stage_id)
-        process_ids = [p['qid'] for p in stage_processes]
-        
-        # Calculate sum of scores for stage
-        stage_scores = [assessment_data.get(pid, 0) for pid in process_ids if pid in assessment_data]
-        if stage_scores:
-            stage_sum = sum(stage_scores)
-        else:
-            stage_sum = 0
-        
-        # Each stage can have a maximum of 4 points (4 processes × 1.0 max score)
-        stage_averages[stage_id] = {
-            "name": stage_names[stage_id],
-            "score": stage_sum,
-            "max_score": 4.0  # Maximum possible score for any stage
-        }
-    
-    # Get the weakest stages (lowest 3)
-    weak_stages = sorted([(id, data) for id, data in stage_averages.items()], 
-                        key=lambda x: x[1]["score"])[:3]
-    
-    # Select an outcome to target
+    # Get business outcomes
     outcomes = get_business_outcomes()
-    selected_outcome = st.selectbox(
-        "Select a business outcome to target for improvement:",
+    
+    # Select target outcome
+    target_outcome = st.selectbox(
+        "Select your priority business outcome:",
         options=outcomes
     )
     
-    # Get processes related to this outcome
-    outcome_processes = get_processes_for_outcome(selected_outcome)
+    # Create a mapping of process IDs to names for reference
+    process_names = {p['qid']: p['process'] for p in process_data}
     
-    # Find the intersection of weak stages and outcome processes
-    targeted_processes = []
+    # Get processes for the selected outcome
+    outcome_processes = get_processes_for_outcome(target_outcome)
     
-    for stage_id, stage_data in weak_stages:
-        # Get processes for this stage
-        stage_processes = get_process_data_for_stage(stage_id)
-        
-        # Filter for processes that belong to both this stage and the selected outcome
-        for process in stage_processes:
-            if process['qid'] in outcome_processes:
-                score = assessment_data.get(process['qid'], 0)
-                targeted_processes.append({
-                    "id": process['qid'],
-                    "stage": stage_data["name"],
-                    "process": process['process'],
-                    "description": process['description'],
-                    "score": score
-                })
+    # Display the processes that contribute to this outcome
+    st.subheader(f"Processes Contributing to {target_outcome}")
     
-    # Sort by score (lowest first)
-    targeted_processes = sorted(targeted_processes, key=lambda x: x["score"])
+    # Create a table for the processes
+    process_table = []
+    for process_id in outcome_processes:
+        process_info = next((p for p in process_data if p['qid'] == process_id), None)
+        if process_info:
+            process_table.append({
+                "ID": process_id,
+                "Process": process_info['process'],
+                "Description": process_info['description'],
+                "Stage": process_info['stage']
+            })
     
-    # Display results
-    if targeted_processes:
-        st.subheader(f"Priority Improvement Areas for {selected_outcome}")
-        
-        for i, process in enumerate(targeted_processes[:5]):  # Show top 5 improvement areas
-            with st.container():
-                col1, col2 = st.columns([1, 3])
-                
-                with col1:
-                    st.metric(f"Process {process['id']}", f"{process['score']:.2f}/1.00")
-                
-                with col2:
-                    st.markdown(f"**{process['process']}** - {process['stage']}")
-                    st.write(process['description'])
-                    
-                    # Get KPI and PPE capability info
-                    if process['id'] in KPI_MATRIX:
-                        kpi_info = KPI_MATRIX[process['id']]
-                        
-                        st.markdown("##### Key Performance Indicators")
-                        st.info(f"**KPI Metric:** {kpi_info['kpi']}")
-                        
-                        if kpi_info['ppe_cap']:
-                            st.markdown("##### PPE Implementation Capability")
-                            st.success(kpi_info['ppe_cap'])
-                
-                st.markdown("---")
-    else:
-        st.info(f"No specific processes found at the intersection of your weakest areas and {selected_outcome}. Try selecting a different outcome or complete more of your assessment.")
+    # Create a dataframe for the processes
+    process_df = pd.DataFrame(process_table)
     
-    # Strategy overview
-    st.subheader("Strategic Improvement Approach")
-    st.write("""
-    1. **Focus on the high-priority processes listed above.** These represent the intersection of your weakest capabilities with the selected business outcome.
-    2. **Track and monitor the listed KPIs** to measure improvement as you enhance these processes.
-    3. **Consider the PPE implementation capabilities** as potential solutions to address the capability gaps.
-    """)
-    
-    # Allow comparing with benchmark banks to see where they excel
-    st.subheader("Benchmark Comparison")
+    # Allow sorting and filtering
+    st.dataframe(process_df, use_container_width=True)
     
     # Load benchmark data
     banks_data, _ = load_data()
     
+    # Check if user has assessment data to include
+    has_assessment = 'assessment_data' in st.session_state and st.session_state.assessment_data
+    
+    # Option to include user's assessment in comparison
+    include_assessment = False
+    if has_assessment:
+        include_assessment = st.checkbox("Include my assessment in comparison", value=True)
+    
     # Select banks for comparison
-    benchmark_banks = st.multiselect(
-        "Select banks to benchmark against:",
-        options=banks,
-        default=banks[:2] if len(banks) >= 2 else banks
+    st.subheader("Compare Outcome Performance")
+    
+    if include_assessment:
+        bank_options = ["Your Assessment"] + banks
+    else:
+        bank_options = banks
+    
+    selected_banks = st.multiselect(
+        "Select banks for comparison:",
+        options=bank_options,
+        default=bank_options[:3] if len(bank_options) >= 3 else bank_options
     )
     
-    if benchmark_banks:
-        # Prepare comparison data
-        comparison_data = []
-        
-        # Add benchmark data
-        for process in targeted_processes[:5]:
-            process_id = process['id']
-            # Extract stage number
-            stage_id = int(process_id[0]) if process_id[0].isdigit() else int(process_id[:2])
-            
-            row_data = {
-                "Process ID": process_id,
-                "Process": process['process'],
-                "Your Score": process['score']
-            }
-            
-            # Add bank scores
-            for bank in benchmark_banks:
-                if bank in banks_data:
-                    # Use the stage score as proxy for process score
-                    bank_score = banks_data[bank].get(stage_id, 0)
-                    row_data[bank] = bank_score
-            
-            comparison_data.append(row_data)
-        
-        # Create comparison table
-        if comparison_data:
-            comparison_df = pd.DataFrame(comparison_data)
-            st.dataframe(comparison_df, use_container_width=True)
-            
-            # Provide insights
-            st.markdown("### Insights")
-            for bank in benchmark_banks:
-                bank_scores = [row.get(bank, 0) for row in comparison_data]
-                if bank_scores:
-                    bank_avg = sum(bank_scores) / len(bank_scores)
-                    st.write(f"**{bank}** averages **{bank_avg:.2f}/4.00** in these processes, " + 
-                            f"{'significantly higher than your score' if bank_avg > 0.6 else 'comparable to your current capability'}.")
+    if not selected_banks:
+        st.warning("Please select at least one bank for comparison")
+        return
+    
+    # Prepare data for comparison
+    comparison_data = {}
+    
+    for bank in selected_banks:
+        if bank == "Your Assessment":
+            # Use user assessment data
+            process_values = st.session_state.assessment_data
+            avg_score = calculate_outcome_score(process_values, target_outcome)
+            comparison_data[bank] = avg_score
         else:
-            st.warning("No comparison data available for the selected banks.")
+            # Use bank benchmark data
+            bank_data = banks_data.get(bank, {})
+            
+            # Convert bank stage scores to process scores (approximation)
+            process_values = {}
+            for stage_id, stage_score in bank_data.items():
+                if isinstance(stage_id, int):  # Skip the "Overall" key
+                    stage_processes = get_process_data_for_stage(stage_id)
+                    avg_process_score = stage_score / len(stage_processes) if stage_processes else 0
+                    
+                    for process in stage_processes:
+                        process_values[process['qid']] = avg_process_score
+            
+            avg_score = calculate_outcome_score(process_values, target_outcome)
+            comparison_data[bank] = avg_score
+    
+    # Create bar chart for outcome comparison
+    comparison_df = pd.DataFrame({
+        "Bank": list(comparison_data.keys()),
+        "Score": list(comparison_data.values())
+    })
+    
+    # Sort by score (descending)
+    comparison_df = comparison_df.sort_values("Score", ascending=False)
+    
+    st.bar_chart(comparison_df.set_index("Bank"))
+    
+    # Detailed gap analysis
+    st.subheader("Gap Analysis & Improvement Plan")
+    
+    # If user's assessment is included, show gap analysis
+    if include_assessment and "Your Assessment" in selected_banks:
+        # Find the top-performing bank for this outcome
+        top_bank = max([(bank, score) for bank, score in comparison_data.items() if bank != "Your Assessment"], 
+                       key=lambda x: x[1], default=(None, 0))
+        
+        if top_bank[0]:
+            st.markdown(f"### Gap Analysis vs. {top_bank[0]}")
+            
+            # Calculate the gap
+            user_score = comparison_data.get("Your Assessment", 0)
+            top_score = top_bank[1]
+            gap = top_score - user_score
+            
+            # Show the gap
+            st.metric("Outcome Performance Gap", f"{gap:.2f}")
+            
+            # Generate top 3 processes with largest gaps
+            user_values = st.session_state.assessment_data
+            
+            # Get bank process values (approximation)
+            bank_process_values = {}
+            bank_data = banks_data.get(top_bank[0], {})
+            
+            for stage_id, stage_score in bank_data.items():
+                if isinstance(stage_id, int):
+                    stage_processes = get_process_data_for_stage(stage_id)
+                    avg_process_score = stage_score / len(stage_processes) if stage_processes else 0
+                    
+                    for process in stage_processes:
+                        bank_process_values[process['qid']] = avg_process_score
+            
+            # Calculate gaps for each process in the outcome
+            process_gaps = []
+            for process_id in outcome_processes:
+                user_value = user_values.get(process_id, 0)
+                bank_value = bank_process_values.get(process_id, 0)
+                gap = bank_value - user_value
+                
+                process_info = next((p for p in process_data if p['qid'] == process_id), None)
+                if process_info:
+                    process_gaps.append({
+                        "ID": process_id,
+                        "Process": process_info['process'],
+                        "Your Score": user_value,
+                        "Top Score": bank_value,
+                        "Gap": gap
+                    })
+            
+            # Sort by gap (descending)
+            process_gaps.sort(key=lambda x: x["Gap"], reverse=True)
+            
+            # Show the top 3 processes with largest gaps
+            st.markdown("### Top Improvement Opportunities")
+            
+            for i, gap_info in enumerate(process_gaps[:3]):
+                st.markdown(f"#### {i+1}. {gap_info['ID']}: {gap_info['Process']}")
+                st.write(f"Your Score: {gap_info['Your Score']:.2f}")
+                st.write(f"Top Performer Score: {gap_info['Top Score']:.2f}")
+                st.write(f"Gap: {gap_info['Gap']:.2f}")
+                
+                # Get improvement advice
+                process_detail = next((p for p in process_data if p['qid'] == gap_info['ID']), None)
+                
+                if process_detail:
+                    with st.expander("Improvement Recommendations"):
+                        # Determine current and next levels
+                        current_level = "Basic"
+                        next_level = "Advanced"
+                        
+                        if gap_info['Your Score'] >= 0.33 and gap_info['Your Score'] < 0.66:
+                            current_level = "Advanced"
+                            next_level = "Leading"
+                        elif gap_info['Your Score'] >= 0.66 and gap_info['Your Score'] < 1.0:
+                            current_level = "Leading"
+                            next_level = "Emerging"
+                        
+                        st.markdown(f"**Current Level ({current_level})**:")
+                        st.write(process_detail[current_level.lower()])
+                        
+                        st.markdown(f"**Target Level ({next_level})**:")
+                        st.write(process_detail[next_level.lower()])
+                        
+                        st.markdown("**Implementation Approach**:")
+                        st.write("1. Assess current state capabilities in detail")
+                        st.write("2. Identify specific technology and process gaps")
+                        st.write("3. Develop a phased implementation plan")
+                        st.write("4. Prioritize quick wins for early business impact")
