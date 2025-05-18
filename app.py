@@ -15,8 +15,7 @@ from components import (
     render_bank_selection, 
     render_assessment_view, 
     render_comparison_view,
-    render_outcome_analysis,
-    render_targeted_outcome
+    render_outcome_analysis
 )
 
 # Set page configuration
@@ -52,7 +51,7 @@ def main():
     st.sidebar.title("Navigation")
     app_mode = st.sidebar.radio(
         "Select Mode",
-        ["Assessment Tool", "Bank Comparison", "Business Outcome Analysis", "Targeted Outcome"]
+        ["Assessment Tool", "Bank Comparison", "Business Outcome Analysis & Improvement"]
     )
     
     # Main application logic based on selected mode
@@ -60,10 +59,8 @@ def main():
         render_assessment_view(process_data)
     elif app_mode == "Bank Comparison":
         render_comparison_view(banks)
-    elif app_mode == "Business Outcome Analysis":
-        render_outcome_analysis(banks)
-    else:  # Targeted Outcome
-        render_targeted_outcome(process_data, banks)
+    else:  # Business Outcome Analysis & Improvement
+        render_outcome_analysis(process_data, banks)
 
 if __name__ == "__main__":
     main()
