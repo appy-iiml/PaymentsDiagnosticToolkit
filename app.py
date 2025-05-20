@@ -17,6 +17,7 @@ from components import (
     render_comparison_view,
     render_outcome_analysis
 )
+from dashboard import render_dashboard_tab
 
 # Set page configuration
 st.set_page_config(
@@ -42,6 +43,8 @@ def main():
         st.session_state.current_bank = None
     if 'comparison_banks' not in st.session_state:
         st.session_state.comparison_banks = []
+    if 'show_results' not in st.session_state:
+        st.session_state.show_results = False
     
     # Load benchmark data
     process_data = load_process_details()
@@ -51,11 +54,13 @@ def main():
     st.sidebar.title("Navigation")
     app_mode = st.sidebar.radio(
         "Select Mode",
-        ["Assessment Tool", "Bank Comparison", "Business Outcome Analysis & Improvement"]
+        ["Control Tower Dashboard", "Assessment Tool", "Bank Comparison", "Business Outcome Analysis & Improvement"]
     )
     
     # Main application logic based on selected mode
-    if app_mode == "Assessment Tool":
+    if app_mode == "Control Tower Dashboard":
+        render_dashboard_tab()
+    elif app_mode == "Assessment Tool":
         render_assessment_view(process_data)
     elif app_mode == "Bank Comparison":
         render_comparison_view(banks)
