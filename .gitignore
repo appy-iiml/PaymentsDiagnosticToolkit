@@ -1,0 +1,56 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.eggs/
+dist/
+build/
+sdist/
+*.egg-info/
+*.deb
+*.rpm
+*.exe
+
+# PyInstaller
+**/__pycache__
+**/.pytest_cache
+*.spec
+dist/
+build/
+
+# Environments
+.env
+venv/
+env/
+ENV/
+*.log
+instance/
+_build/
+develop-eggs/
+parts/
+bin/
+lib/
+lib64/
+include/
+share/
+*.pth
+*.egg-info
+.installed.cfg
+*.manifest
+*.db
+*.sqlite3
+
+# Streamlit
+.streamlit/secrets.toml
+
+# OS or Editor related files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+
+.DS_Store
+__pycache__
