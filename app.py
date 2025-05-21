@@ -18,6 +18,7 @@ from components import (
     render_outcome_analysis
 )
 from dashboard import render_dashboard_tab
+from root_cause_analysis import render_root_cause_analysis
 
 # Set page configuration
 st.set_page_config(
@@ -54,12 +55,14 @@ def main():
     st.sidebar.title("Navigation")
     app_mode = st.sidebar.radio(
         "Select Mode",
-        ["Control Tower Dashboard", "Assessment Tool", "Bank Comparison", "Business Outcome Analysis & Improvement"]
+        ["Control Tower Dashboard", "Root Cause Analysis", "Assessment Tool", "Bank Comparison", "Business Outcome Analysis & Improvement"]
     )
     
     # Main application logic based on selected mode
     if app_mode == "Control Tower Dashboard":
         render_dashboard_tab()
+    elif app_mode == "Root Cause Analysis":
+        render_root_cause_analysis()
     elif app_mode == "Assessment Tool":
         render_assessment_view(process_data)
     elif app_mode == "Bank Comparison":
