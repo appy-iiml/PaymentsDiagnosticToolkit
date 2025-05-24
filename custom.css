@@ -118,3 +118,72 @@ h1, h2, h3 {
     background-color: #663399;
     color: white;
 }
+
+/* Control Tower Dashboard */
+.metric-tile {
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+.green {
+    background-color: rgba(0, 128, 0, 0.1);
+    border-left: 5px solid green;
+}
+
+.amber {
+    background-color: rgba(255, 165, 0, 0.1);
+    border-left: 5px solid orange;
+}
+
+.red {
+    background-color: rgba(255, 0, 0, 0.1);
+    border-left: 5px solid red;
+}
+
+.metric-value {
+    font-size: 32px;
+    font-weight: bold;
+    margin: 10px 0;
+}
+
+.metric-target {
+    font-size: 14px;
+    color: #666;
+}
+
+.subtitle {
+    color: #666;
+    font-size: 1.1em;
+    margin-top: -10px;
+    margin-bottom: 20px;
+}
+
+.dashboard-info {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    margin: 20px 0;
+}
+
+.green-dot, .amber-dot, .red-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+
+.green-dot {
+    background-color: green;
+}
+
+.amber-dot {
+    background-color: orange;
+}
+
+.red-dot {
+    background-color: red;
+}

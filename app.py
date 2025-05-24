@@ -15,9 +15,10 @@ from components import (
     render_bank_selection, 
     render_assessment_view, 
     render_comparison_view,
-    render_outcome_analysis,
-    render_targeted_outcome
+    render_outcome_analysis
 )
+from dashboard import render_dashboard_tab
+from root_cause_analysis import render_root_cause_analysis
 
 # Set page configuration
 st.set_page_config(
@@ -43,6 +44,8 @@ def main():
         st.session_state.current_bank = None
     if 'comparison_banks' not in st.session_state:
         st.session_state.comparison_banks = []
+    if 'show_results' not in st.session_state:
+        st.session_state.show_results = False
     
     # Load benchmark data
     process_data = load_process_details()
@@ -52,18 +55,20 @@ def main():
     st.sidebar.title("Navigation")
     app_mode = st.sidebar.radio(
         "Select Mode",
-        ["Assessment Tool", "Bank Comparison", "Business Outcome Analysis", "Targeted Outcome"]
+        ["Control Tower Dashboard", "Root Cause Analysis", "Assessment Tool", "Bank Comparison", "Business Outcome Analysis & Improvement"]
     )
     
     # Main application logic based on selected mode
-    if app_mode == "Assessment Tool":
+    if app_mode == "Control Tower Dashboard":
+        render_dashboard_tab()
+    elif app_mode == "Root Cause Analysis":
+        render_root_cause_analysis()
+    elif app_mode == "Assessment Tool":
         render_assessment_view(process_data)
     elif app_mode == "Bank Comparison":
         render_comparison_view(banks)
-    elif app_mode == "Business Outcome Analysis":
-        render_outcome_analysis(banks)
-    else:  # Targeted Outcome
-        render_targeted_outcome(process_data, banks)
+    else:  # Business Outcome Analysis & Improvement
+        render_outcome_analysis(process_data, banks)
 
 if __name__ == "__main__":
     main()
