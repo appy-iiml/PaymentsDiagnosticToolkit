@@ -261,472 +261,253 @@ def render_control_tower_metrics():
         status = "green" if KEY_METRICS["Latency"]["current"] <= KEY_METRICS["Latency"]["target"] * 1.1 else ("amber" if KEY_METRICS["Latency"]["current"] <= KEY_METRICS["Latency"]["target"] * 1.3 else "red")
         st.markdown(f"""
         <div class='metric-tile {status}'>
-            <h3>Latency</h3>
-            <div class='metric-value'>{KEY_METRICS["Latency"]["current"]:.1f} sec</div>
-            <div class='metric-target'>Target: {KEY_METRICS["Latency"]["target"]:.1f} sec</div>
+            <h3>Processing Latency</h3>
+            <div class='metric-value'>{KEY_METRICS["Latency"]["current"]:.1f}s</div>
+            <div class='metric-target'>Target: {KEY_METRICS["Latency"]["target"]:.1f}s</div>
         </div>
         """, unsafe_allow_html=True)
-    
-    # Add a brief explanation
-    st.markdown("""
-    <div class='dashboard-info'>
-        <p><span class='green-dot'></span> <strong>Green:</strong> On target or within 10% of goal</p>
-        <p><span class='amber-dot'></span> <strong>Amber:</strong> Within 30% of target - needs attention</p>
-        <p><span class='red-dot'></span> <strong>Red:</strong> Significantly off target - critical action needed</p>
-    </div>
-    """, unsafe_allow_html=True)
 
-def render_improvement_wizard():
-    """Render the three-click improvement wizard"""
-    st.header("Payment Improvement Wizard")
-    st.markdown("<p class='subtitle'>Identify gaps and prioritize improvements in just three clicks</p>", unsafe_allow_html=True)
+def render_payment_streams_analysis():
+    """Render payment streams analysis section"""
+    st.subheader("Payment Streams Analysis")
     
-    # Step 1: Select Payment Stream
+    # Payment stream selector
     selected_stream = st.selectbox(
-        "Step 1: Select Payment Stream", 
-        PAYMENT_STREAMS,
-        help="Choose the specific payment flow you want to analyze"
+        "Select Payment Stream for Analysis:",
+        options=PAYMENT_STREAMS
     )
     
-    # Step 2: Select Business Goal
-    selected_goal = st.selectbox(
-        "Step 2: Select Business Goal",
-        BUSINESS_GOALS,
-        help="What business outcome are you trying to achieve?"
-    )
+    # Mock data for payment stream metrics
+    stream_metrics = {
+        "Domestic Low Value (ACH/BACS)": {
+            "volume": "2.3M",
+            "value": "$45.2B",
+            "stp_rate": "94.2%",
+            "avg_latency": "2.1s",
+            "cost_per_tx": "$0.12"
+        },
+        "Domestic High Value (RTGS/Fedwire)": {
+            "volume": "156K",
+            "value": "$127.8B",
+            "stp_rate": "98.7%",
+            "avg_latency": "1.8s",
+            "cost_per_tx": "$2.45"
+        },
+        "International (SWIFT/Cross-Border)": {
+            "volume": "89K",
+            "value": "$23.4B",
+            "stp_rate": "78.3%",
+            "avg_latency": "12.3s",
+            "cost_per_tx": "$8.75"
+        },
+        "Real-Time Payments (FedNow/RTP)": {
+            "volume": "1.8M",
+            "value": "$12.7B",
+            "stp_rate": "96.8%",
+            "avg_latency": "0.9s",
+            "cost_per_tx": "$0.08"
+        },
+        "Cards Processing (Debit/Credit)": {
+            "volume": "12.4M",
+            "value": "$89.3B",
+            "stp_rate": "99.1%",
+            "avg_latency": "0.3s",
+            "cost_per_tx": "$0.05"
+        }
+    }
     
-    # Step 3: Enter KPIs
-    st.markdown("### Step 3: Enter Today's KPIs")
-    
-    # Determine which KPIs to show based on selected goal
-    if selected_goal in GOAL_PROCESS_MAP:
-        # Get relevant KPIs for this goal
-        relevant_kpis = GOAL_PROCESS_MAP[selected_goal]["representative_kpis"]
-        key_metric = GOAL_PROCESS_MAP[selected_goal]["key_metric"]
-        current_value = KEY_METRICS[key_metric]["current"]
-        target_value = KEY_METRICS[key_metric]["target"]
+    # Display metrics for selected stream
+    if selected_stream in stream_metrics:
+        metrics = stream_metrics[selected_stream]
         
-        # Show primary KPI linked to the goal with a visual status
-        st.markdown(f"#### Primary KPI: {KEY_METRICS[key_metric]['representative_kpi']}")
-        
-        # Primary KPI input 
-        col1, col2 = st.columns(2)
+        col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
-            if key_metric in ["STP Rate", "Fraud Loss"]:
-                # Use percentage input for these metrics
-                new_value = st.number_input(
-                    f"Current {key_metric} (%)", 
-                    min_value=0.0, 
-                    max_value=100.0, 
-                    value=current_value*100,
-                    step=0.1,
-                    format="%.1f"
-                ) / 100.0
-            elif key_metric == "Cost per Transaction":
-                # Use dollar input
-                new_value = st.number_input(
-                    f"Current {key_metric} ($)", 
-                    min_value=0.01, 
-                    max_value=10.0, 
-                    value=current_value,
-                    step=0.01,
-                    format="%.2f"
-                )
-            else:  # Latency
-                # Use seconds or ms input based on KPI
-                new_value = st.number_input(
-                    f"Current {key_metric} (seconds)", 
-                    min_value=0.1, 
-                    max_value=60.0, 
-                    value=current_value,
-                    step=0.1,
-                    format="%.1f"
-                )
-        
+            st.metric("Daily Volume", metrics["volume"])
         with col2:
-            # Calculate the gap
-            if key_metric in ["STP Rate"]:
-                # For STP, higher is better
-                gap = target_value - new_value
-                gap_percentage = abs(gap / target_value * 100)
-                direction = "below" if gap > 0 else "above"
-            else:
-                # For Cost, Fraud, Latency, lower is better
-                gap = new_value - target_value
-                gap_percentage = abs(gap / target_value * 100)
-                direction = "above" if gap > 0 else "below"
-            
-            # Display gap info with color coding
-            if abs(gap_percentage) <= 10:
-                st.success(f"**Current performance is within 10% of target**")
-            elif abs(gap_percentage) <= 30:
-                st.warning(f"**Performance gap: {gap_percentage:.1f}% {direction} target**")
-            else:
-                st.error(f"**Critical gap: {gap_percentage:.1f}% {direction} target**")
-            
-            # Show business outcome indicators
-            st.markdown("**Business Impact Indicators:**")
-            for indicator in GOAL_PROCESS_MAP[selected_goal]["bo_indicators"]:
-                st.markdown(f"- {indicator}")
-        
-        # Show secondary KPIs (optional)
-        with st.expander("Additional Related KPIs"):
-            st.markdown("Select other KPIs to include in the analysis:")
-            
-            # Show checkboxes for secondary KPIs
-            selected_secondary_kpis = []
-            for kpi in relevant_kpis[:3]:  # Limit to first 3 to keep it simple
-                if st.checkbox(kpi, value=True):
-                    selected_secondary_kpis.append(kpi)
-    
-    # Display generate button
-    if st.button("Generate Improvement Plan", type="primary"):
-        st.session_state.show_results = True
-    
-    # Show results if button was clicked
-    if st.session_state.get('show_results', False):
-        display_improvement_results(selected_stream, selected_goal)
+            st.metric("Daily Value", metrics["value"])
+        with col3:
+            st.metric("STP Rate", metrics["stp_rate"])
+        with col4:
+            st.metric("Avg Latency", metrics["avg_latency"])
+        with col5:
+            st.metric("Cost/Tx", metrics["cost_per_tx"])
 
-def display_improvement_results(stream, goal):
-    """Display the improvement results for the selected stream and goal"""
-    st.markdown("---")
-    st.subheader(f"Improvement Plan: {stream} - {goal}")
+def render_business_goals_section():
+    """Render business goals and improvement recommendations"""
+    st.subheader("Business Goal Analysis & Improvement Roadmap")
     
-    # Get the relevant processes for the selected goal
-    if goal in GOAL_PROCESS_MAP:
-        # Get relevant data
-        relevant_processes = GOAL_PROCESS_MAP[goal]["processes"]
-        relevant_kpis = GOAL_PROCESS_MAP[goal]["representative_kpis"]
-        bo_indicators = GOAL_PROCESS_MAP[goal]["bo_indicators"]
-        key_metric = GOAL_PROCESS_MAP[goal]["key_metric"]
-        
-        # Create tabs for the results
-        tabs = st.tabs(["Business Impact", "Recommended Actions", "Benchmark Comparison"])
-        
-        with tabs[0]:
-            st.markdown(f"### {goal} Impact Analysis")
-            
-            # Show KPI impacts in a clear visual summary
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                # Create a "Business Scorecard" showing the KPIs and their status
-                st.markdown("#### Business Outcome Scorecard")
-                
-                # Create explanatory text
-                st.markdown(f"""
-                Focusing on **{goal}** will drive improvements in these business indicators:
-                """)
-                
-                # Display business indicators with graphical elements
-                for indicator in bo_indicators:
-                    st.markdown(f"""
-                    <div style="background-color: rgba(102, 51, 153, 0.1); padding: 10px; border-radius: 5px; margin-bottom: 10px; border-left: 4px solid #663399;">
-                        <strong>{indicator}</strong>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                # Show top KPIs related to this business outcome
-                st.markdown("#### Key Performance Indicators")
-                
-                for kpi in relevant_kpis[:5]:  # Show top 5 KPIs
-                    # Assign random status for demo purposes
-                    import random
-                    status = random.choice(["red", "amber", "green"])
-                    
-                    st.markdown(f"""
-                    <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                        <span class="{status}-dot"></span>
-                        <span style="margin-left: 10px;">{kpi}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-            
-            with col2:
-                # Show a metric summary of the key metric for this business outcome
-                st.metric(
-                    label=f"Current {key_metric}",
-                    value=f"{KEY_METRICS[key_metric]['current']:.2f}" if key_metric == "Cost per Transaction" else 
-                          f"{KEY_METRICS[key_metric]['current']*100:.1f}%" if key_metric in ["STP Rate", "Fraud Loss"] else
-                          f"{KEY_METRICS[key_metric]['current']:.1f}s",
-                    delta="Gap from Target: " + (
-                        f"{(KEY_METRICS[key_metric]['target'] - KEY_METRICS[key_metric]['current'])*100:.1f}%" 
-                        if key_metric in ["STP Rate"] else
-                        f"{(KEY_METRICS[key_metric]['current'] - KEY_METRICS[key_metric]['target']):.2f}" 
-                        if key_metric == "Cost per Transaction" else
-                        f"{(KEY_METRICS[key_metric]['current'] - KEY_METRICS[key_metric]['target'])*100:.1f}%" 
-                        if key_metric == "Fraud Loss" else
-                        f"{(KEY_METRICS[key_metric]['current'] - KEY_METRICS[key_metric]['target']):.1f}s"
-                    ),
-                )
-            
-            # Display detailed KPI analysis
-            st.markdown("### Process Capability Gap Analysis")
-            
-            # Create a process assessment table showing gaps
-            process_data = load_process_details()
-            relevant_process_data = [p for p in process_data if p['qid'] in relevant_processes]
-            
-            # Create process capability visualization for key processes
-            details_data = []
-            for i, process in enumerate(relevant_process_data[:6]):  # Show top 6 most critical processes
-                current_level = "Advanced"  # For demo purposes
-                current_score = 0.33  # For demo purposes
-                gap_score = 0.33  # Gap to Leading level for demo
-                impact = "High" if i < 3 else "Medium"
-                
-                details_data.append({
-                    "ID": process['qid'],
-                    "Process": process['process'],
-                    "Current Level": current_level,
-                    "Gap to Target": gap_score,
-                    "Impact on Goal": impact
-                })
-            
-            details_df = pd.DataFrame(details_data)
-            st.dataframe(details_df, use_container_width=True)
-            
-            # Create KPI to Process Mapping
-            st.markdown("#### KPI to Process Mapping")
-            st.markdown("The following processes are critical for improving these KPIs:")
-            
-            # KPI data table
-            kpi_data = []
-            for pid in relevant_processes[:8]:  # Limit to top 8
-                if pid in KPI_MATRIX:
-                    kpi_data.append({
-                        "Process ID": pid,
-                        "KPI": KPI_MATRIX[pid]["kpi"],
-                        "Business Outcome": KEY_METRICS[key_metric]["business_outcome"] 
-                            if key_metric in KEY_METRICS else "Unknown"
-                    })
-            
-            kpi_df = pd.DataFrame(kpi_data)
-            st.dataframe(kpi_df, use_container_width=True)
-        
-        with tabs[1]:
-            st.markdown("### Recommended Actions")
-            
-            # Create a visual roadmap at the top
-            st.markdown("#### Improvement Roadmap")
-            
-            # Simple timeline visualization
-            timeline_cols = st.columns([2, 3, 2])
-            with timeline_cols[0]:
-                st.markdown("""
-                <div style="text-align:center; border-bottom: 3px solid #663399; padding-bottom: 10px;">
-                    <h5>Quick Wins</h5>
-                    <p>1-3 months</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with timeline_cols[1]:
-                st.markdown("""
-                <div style="text-align:center; border-bottom: 3px solid #9370DB; padding-bottom: 10px;">
-                    <h5>Medium-Term Initiatives</h5>
-                    <p>3-9 months</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with timeline_cols[2]:
-                st.markdown("""
-                <div style="text-align:center; border-bottom: 3px solid #B19CD9; padding-bottom: 10px;">
-                    <h5>Strategic Investments</h5>
-                    <p>9-18 months</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            st.markdown("")  # Spacer
-            
-            # Quick Wins
-            st.subheader("Quick Wins (1-3 months)")
-            quick_wins = IMPROVEMENT_RECOMMENDATIONS[goal]["quick_wins"]
-            
-            for i, win in enumerate(quick_wins):
-                with st.expander(f"{win['title']} - Impact: {win['impact']}"):
-                    st.markdown(f"""
-                    **Effort Required:** {win['effort']}  
-                    **Implementation Timeline:** {win['timeframe']}  
-                    **KPI Impact:** {win['kpi_impact']}
-                    """)
-                    
-                    # Add specific process recommendations
-                    st.markdown("**Related Processes:**")
-                    for pid in relevant_processes[:3]:  # Just show a few for demo
-                        process_name = next((p['process'] for p in relevant_process_data if p['qid'] == pid), "Unknown Process")
-                        st.markdown(f"- {pid}: {process_name}")
-            
-            # Strategic Investments
-            st.subheader("Strategic Investments (9-18 months)")
-            strategic = IMPROVEMENT_RECOMMENDATIONS[goal]["strategic_investments"]
-            
-            for i, investment in enumerate(strategic):
-                with st.expander(f"{investment['title']} - Impact: {investment['impact']}"):
-                    st.markdown(f"""
-                    **Effort Required:** {investment['effort']}  
-                    **Implementation Timeline:** {investment['timeframe']}  
-                    **KPI Impact:** {investment['kpi_impact']}
-                    """)
-                    
-                    # Add capability description
-                    st.markdown("**Capability Enhancement:**")
-                    st.markdown("This strategic initiative will transform your payment capabilities in the following ways:")
-                    
-                    capabilities = []
-                    # Select 3 random processes for the demo
-                    import random
-                    sample_processes = random.sample(relevant_process_data, min(3, len(relevant_process_data)))
-                    
-                    for p in sample_processes:
-                        capabilities.append(f"- Transform {p['process']} from {p.get('advanced', 'Current')} to {p.get('emerging', 'Target')}")
-                    
-                    for cap in capabilities:
-                        st.markdown(cap)
-        
-        with tabs[2]:
-            st.markdown("### Benchmark Comparison")
-            
-            # Create benchmark data for comparison
-            # Using existing data from the system
-            from data_loader import load_data
-            banks_data, _ = load_data()
-            
-            # Add current bank data
-            current_bank_data = {
-                "Your Bank": {
-                    1: 2.0, 2: 2.0, 3: 1.5, 4: 1.5, 5: 2.0, 6: 1.5, 
-                    7: 1.5, 8: 2.0, 9: 2.0, 10: 1.5, 11: 1.5, 12: 1.0,
-                    "Overall": 1.67
-                }
-            }
-            
-            # Combine data
-            combined_data = {**current_bank_data, **banks_data}
-            
-            # Select top banks for comparison
-            top_banks = ["JPMC (Global)", "DBS (Asia)"] 
-            comparison_banks = ["Your Bank"] + top_banks
-            
-            # Create radar chart
-            fig = create_radar_chart(
-                combined_data,
-                comparison_banks,
-                f"Industry Comparison: {goal}"
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Show detailed gap analysis
-            st.markdown("### Gap Analysis by Process Stage")
-            
-            # Create a bar chart for specific stages related to the selected goal
-            # This is a simplification - in a real app, would need to map goals to stages
-            relevant_stages = [1, 2, 3, 4] if goal == "Customer Satisfaction" else \
-                              [3, 4, 7, 8] if goal == "Speed-to-Market" else \
-                              [2, 3, 5, 12] if goal == "Risk Management" else \
-                              [3, 7, 10] if goal == "Cost Reduction" else [1, 4, 11]
-            
-            stage_names = get_stage_names()
-            stage_data = []
-            
-            for stage_id in relevant_stages:
-                stage_data.append({
-                    "Stage": f"{stage_id}. {stage_names[stage_id]}",
-                    "Your Bank": current_bank_data["Your Bank"].get(stage_id, 0),
-                    top_banks[0]: combined_data[top_banks[0]].get(stage_id, 0),
-                    "Gap": combined_data[top_banks[0]].get(stage_id, 0) - current_bank_data["Your Bank"].get(stage_id, 0)
-                })
-            
-            stage_df = pd.DataFrame(stage_data)
-            st.dataframe(stage_df, use_container_width=True)
-            
-            # Show investment summary and ROI
-            st.markdown("### Investment Summary")
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Quick Wins Cost", "$150K-$250K")
-            
-            with col2:
-                st.metric("Strategic Investment", "$1.2M-$1.8M")
-            
-            with col3:
-                st.metric("Expected ROI", "2.5-3.5x")
-
-def render_dashboard_tab():
-    """Main function to render the dashboard view"""
-    
-    # Add custom CSS for dashboard metrics
-    st.markdown("""
-    <style>
-    .metric-tile {
-        padding: 20px;
-        border-radius: 10px;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        text-align: center;
-    }
-    .green {
-        background-color: rgba(0, 128, 0, 0.1);
-        border-left: 5px solid green;
-    }
-    .amber {
-        background-color: rgba(255, 165, 0, 0.1);
-        border-left: 5px solid orange;
-    }
-    .red {
-        background-color: rgba(255, 0, 0, 0.1);
-        border-left: 5px solid red;
-    }
-    .metric-value {
-        font-size: 32px;
-        font-weight: bold;
-        margin: 10px 0;
-    }
-    .metric-target {
-        font-size: 14px;
-        color: #666;
-    }
-    .subtitle {
-        color: #666;
-        font-size: 1.1em;
-        margin-top: -10px;
-        margin-bottom: 20px;
-    }
-    .dashboard-info {
-        background-color: #f8f9fa;
-        padding: 15px;
-        border-radius: 5px;
-        margin: 20px 0;
-    }
-    .green-dot, .amber-dot, .red-dot {
-        display: inline-block;
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        margin-right: 5px;
-    }
-    .green-dot {
-        background-color: green;
-    }
-    .amber-dot {
-        background-color: orange;
-    }
-    .red-dot {
-        background-color: red;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Add tabs for the two floors of the control tower
-    tower_level = st.radio(
-        "Control Tower Level",
-        ["Live Dashboard (Upper Level)", "Improvement Wizard (Lower Level)"],
-        horizontal=True
+    # Business goal selector
+    selected_goal = st.selectbox(
+        "Select Business Goal:",
+        options=BUSINESS_GOALS
     )
     
-    if tower_level == "Live Dashboard (Upper Level)":
-        render_control_tower_metrics()
-    else:
-        render_improvement_wizard()
+    if selected_goal in GOAL_PROCESS_MAP:
+        goal_data = GOAL_PROCESS_MAP[selected_goal]
+        
+        # Display goal overview
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            st.markdown(f"### {selected_goal}")
+            st.write(f"**Key Metric:** {goal_data['key_metric']}")
+            st.write(f"**Contributing Processes:** {len(goal_data['processes'])} processes")
+            
+            # Representative KPIs
+            st.markdown("**Representative KPIs:**")
+            for kpi in goal_data["representative_kpis"]:
+                st.write(f"• {kpi}")
+        
+        with col2:
+            # Business outcome indicators
+            st.markdown("**Business Outcome Indicators:**")
+            for indicator in goal_data["bo_indicators"]:
+                st.write(f"• {indicator}")
+        
+        # Improvement recommendations
+        if selected_goal in IMPROVEMENT_RECOMMENDATIONS:
+            recommendations = IMPROVEMENT_RECOMMENDATIONS[selected_goal]
+            
+            st.markdown("### Improvement Roadmap")
+            
+            # Quick wins
+            st.markdown("#### Quick Wins (1-4 months)")
+            for i, rec in enumerate(recommendations["quick_wins"]):
+                with st.expander(f"Quick Win {i+1}: {rec['title']}"):
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.write(f"**Impact:** {rec['impact']}")
+                    with col2:
+                        st.write(f"**Effort:** {rec['effort']}")
+                    with col3:
+                        st.write(f"**Timeframe:** {rec['timeframe']}")
+                    st.write(f"**Expected KPI Impact:** {rec['kpi_impact']}")
+            
+            # Strategic investments
+            st.markdown("#### Strategic Investments (6-18 months)")
+            for i, rec in enumerate(recommendations["strategic_investments"]):
+                with st.expander(f"Strategic Investment {i+1}: {rec['title']}"):
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.write(f"**Impact:** {rec['impact']}")
+                    with col2:
+                        st.write(f"**Effort:** {rec['effort']}")
+                    with col3:
+                        st.write(f"**Timeframe:** {rec['timeframe']}")
+                    st.write(f"**Expected KPI Impact:** {rec['kpi_impact']}")
+
+def render_process_dependency_view():
+    """Render process dependency and impact analysis"""
+    st.subheader("Process Dependency & Impact Analysis")
+    
+    # Create a simple dependency visualization
+    process_data = load_process_details()
+    
+    # Select a process to analyze
+    process_options = [f"{p['qid']}: {p['process']}" for p in process_data]
+    selected_process = st.selectbox(
+        "Select Process for Dependency Analysis:",
+        options=process_options
+    )
+    
+    if selected_process:
+        process_id = selected_process.split(":")[0]
+        
+        # Find the process details
+        process_detail = next((p for p in process_data if p['qid'] == process_id), None)
+        
+        if process_detail:
+            st.markdown(f"### {process_detail['process']}")
+            st.write(process_detail['description'])
+            
+            # Mock dependency analysis
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### Upstream Dependencies")
+                st.write("Processes that this process depends on:")
+                # Mock upstream dependencies
+                if process_id in ["2A", "2B", "2C"]:
+                    st.write("• 1A: Channel Setup & Session Management")
+                    st.write("• 1D: Data Enrichment & Standardization")
+                elif process_id in ["3A", "3B", "3C"]:
+                    st.write("• 1D: Data Enrichment & Standardization")
+                    st.write("• 2A: Multi-Factor Authentication")
+                else:
+                    st.write("• Multiple upstream processes identified")
+            
+            with col2:
+                st.markdown("#### Downstream Impact")
+                st.write("Processes that depend on this process:")
+                # Mock downstream impact
+                if process_id in ["1A", "1B", "1C"]:
+                    st.write("• 2A: Multi-Factor Authentication")
+                    st.write("• 3A: Business Rules Engine")
+                elif process_id in ["2A", "2B", "2C"]:
+                    st.write("• 3A: Business Rules Engine")
+                    st.write("• 4A: Intelligent Payment Routing")
+                else:
+                    st.write("• Multiple downstream processes affected")
+
+def render_dashboard_tab():
+    """Main function to render the complete dashboard tab"""
+    
+    # Control tower metrics at the top
+    render_control_tower_metrics()
+    
+    # Add some spacing
+    st.markdown("---")
+    
+    # Create tabs for different sections
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "Payment Streams", 
+        "Business Goals", 
+        "Process Dependencies", 
+        "Executive Summary"
+    ])
+    
+    with tab1:
+        render_payment_streams_analysis()
+    
+    with tab2:
+        render_business_goals_section()
+    
+    with tab3:
+        render_process_dependency_view()
+    
+    with tab4:
+        # Executive summary
+        st.subheader("Executive Summary")
+        
+        st.markdown("""
+        ### Key Findings
+        
+        **Performance Highlights:**
+        - Overall STP Rate at 82% (target: 95%) - **13 percentage points below target**
+        - Processing costs 87% above target at $0.28 per transaction
+        - Fraud prevention performing well with losses at 0.12% vs 0.05% target
+        - Latency concerns with 4.8s average vs 2.5s target
+        
+        **Priority Areas for Improvement:**
+        1. **Straight-Through Processing** - Focus on automation and exception handling
+        2. **Cost Optimization** - Implement intelligent routing and reduce manual interventions
+        3. **Latency Reduction** - Optimize queue processing and API performance
+        
+        **Recommended Actions:**
+        - Immediate: Implement queue processing optimization (2-month timeline)
+        - Short-term: Deploy enhanced fraud rules and routing optimization (3-4 months)
+        - Long-term: Event-driven architecture transformation (12-18 months)
+        """)
+        
+        # Key metrics summary chart
+        st.markdown("### Metrics Summary")
+        
+        metrics_df = pd.DataFrame({
+            "Metric": ["STP Rate", "Cost per Tx", "Fraud Loss", "Latency"],
+            "Current": [82, 0.28, 0.12, 4.8],
+            "Target": [95, 0.15, 0.05, 2.5],
+            "Status": ["Red", "Red", "Amber", "Red"]
+        })
+        
+        st.dataframe(metrics_df, use_container_width=True)
